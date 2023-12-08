@@ -14,7 +14,7 @@ COPY . .
 RUN cargo build --release
 
 # Runtime
-FROM debian:buster-slim AS runtime
+FROM archlinux:latest AS runtime
 WORKDIR /app
 COPY --from=builder /app/target/release/kserver /usr/local/bin/kserver
 # Run server

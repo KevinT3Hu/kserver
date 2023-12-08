@@ -54,17 +54,6 @@ impl AppState {
 
         let totp = init_totp();
 
-        // if envvar $GENERATE_TOTP_QR is set, generate a QR code for TOTP and save to ./qr.png
-        if let Ok(_) = std::env::var("GENERATE_TOTP_QR") {
-            event!(Level::INFO, "Generating QR code for TOTP");
-            // remove the previous qr.png
-            std::fs::remove_file("./qr.png").unwrap_or_default();
-            let qr = totp.get_qr_png().unwrap();
-            let mut file = std::fs::File::create("./qr.png").unwrap();
-            file.write_all(&qr).unwrap();
-            event!(Level::INFO, "QR code generated");
-        }
-
         event!(Level::INFO, "Creating database helper...");
         let db_helper = DbHelper::new().await;
         event!(Level::INFO, "Database helper created");
@@ -199,6 +188,16 @@ async fn auth_middleware<B>(
 
 #[tokio::main]
 async fn main() {
+
+    if let Ok(_) = std::env::var("GENERATE_TOTP_QR") {
+        let totp = init_totp();
+        std::fs::remove_file("./qr.png").unwrap_or_default();
+            let qr = totp.get_qr_png().unwrap();
+            let mut file = std::fs::File::create("./qr.png").unwrap();
+            file.write_all(&qr).unwrap();
+        return;
+    }
+
     let file_appender = tracing_appender::rolling::daily("/root/logs", "kserver.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     tracing_subscriber::fmt()
