@@ -4,7 +4,7 @@ use std::{io::Write, sync::Arc};
 use axum::{
     body::BoxBody,
     extract::State,
-    http::{Request, StatusCode, Method},
+    http::{Method, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     routing::post,
@@ -15,7 +15,7 @@ use rand::Rng;
 use router::{post_log_in, post_log_out};
 use tokio::sync::Mutex;
 use totp_rs::{Algorithm, TOTP};
-use tower_http::cors::{CorsLayer, Any};
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{event, Level};
 
 mod helper;
@@ -137,7 +137,7 @@ fn init_totp() -> TOTP {
         8,
         1,
         30,
-        "cewiugvnrb948gn9ffNIS".to_owned().into_bytes(),
+        std::env::var("KSERVER_SECRET").unwrap().into_bytes(),
         Some("KServer".to_owned()),
         "SmilingPie".to_owned(),
     );
@@ -159,9 +159,7 @@ async fn auth_middleware<B>(
     req: Request<B>,
     next: Next<B>,
 ) -> Response {
-    let token = req
-        .headers()
-        .get("Authorization");
+    let token = req.headers().get("Authorization");
     if token.is_none() {
         return Response::builder()
             .status(401)
@@ -207,7 +205,7 @@ async fn main() {
         .with_ansi(false)
         .with_writer(non_blocking)
         .init();
-    
+
     let app = create_app().await;
 
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
@@ -220,7 +218,7 @@ async fn create_app() -> Router {
     let state = AppState::new().await;
 
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET,Method::POST])
+        .allow_methods([Method::GET, Method::POST])
         .allow_headers(Any)
         .allow_origin(Any);
 

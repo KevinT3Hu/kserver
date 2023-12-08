@@ -44,3 +44,9 @@ pub struct UpdateAnimeVisibilityRequest {
 pub struct GetAnimeStatesRequest {
     pub anime_ids: Vec<i32>,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct PostUpdateAnimeRatingRequest {
+    pub anime_id: i32,
+    pub rating: i32,
+}

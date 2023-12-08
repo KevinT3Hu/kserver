@@ -1,7 +1,10 @@
 use axum::{extract::State, http::StatusCode, Json};
 use tracing::event;
 
-use crate::{model::request::{LogInRequest, LogOutRequest}, AppState};
+use crate::{
+    model::request::{LogInRequest, LogOutRequest},
+    AppState,
+};
 
 pub mod anime_router;
 
@@ -52,12 +55,9 @@ pub async fn post_log_in(
 
 pub async fn post_log_out(
     State(app_state): State<AppState>,
-    Json(req): Json<LogOutRequest>
+    Json(req): Json<LogOutRequest>,
 ) -> Result<String> {
-    event!(
-        tracing::Level::INFO,
-        "Received request to log out"
-    );
+    event!(tracing::Level::INFO, "Received request to log out");
     app_state.clear_token(&req.token).await;
     Ok(String::new())
 }

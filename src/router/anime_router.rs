@@ -5,21 +5,19 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use tracing::{error, event};
+use tracing::event;
 
 use crate::{
     auth_middleware,
-    helper::db_error::DbError,
-    internal_error,
     model::{
         request::{
-            AnimeWatchListRequest, WatchListRequest,
+            AnimeWatchListRequest, GetAnimeStatesRequest, PostUpdateAnimeRatingRequest,
             UpdateAnimeVisibilityRequest, UpdateEpisodeWatchedStateRequest,
-            UpdateWatchListArchivedRequest, GetAnimeStatesRequest,
+            UpdateWatchListArchivedRequest, WatchListRequest,
         },
-        AnimeState, WatchList, AnimeItem,
+        AnimeItem, AnimeState, WatchList,
     },
-    status, AppState,
+    AppState,
 };
 
 use super::Result;
@@ -44,26 +42,28 @@ pub fn create_router(state: &AppState) -> Router<AppState> {
             post(post_update_watch_list_archived),
         )
         .route("/delete_watch_list", post(post_delete_watch_list))
-        .route("/delete_anime_state_from_watch_list", post(post_delete_anime_state_from_watch_list))
+        .route(
+            "/delete_anime_state_from_watch_list",
+            post(post_delete_anime_state_from_watch_list),
+        )
+        .route("/update_anime_rating", post(post_update_anime_rating))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
         .route("/list", get(get_all_list))
         .route("/get/:anime_id", get(get_query_anime_by_id))
         .route("/get_anime_states", post(post_query_anime_states))
         .route("/all", get(get_query_all_anime_states))
-        .route("/get_watch_list/:watch_list_name", get(get_query_watch_list_by_name))
+        .route(
+            "/get_watch_list/:watch_list_name",
+            get(get_query_watch_list_by_name),
+        )
 }
 
-async fn get_all_list(
-    State(app_state): State<AppState>,
-) -> Result<Json<Vec<WatchList>>> {
+async fn get_all_list(State(app_state): State<AppState>) -> Result<Json<Vec<WatchList>>> {
     let db = app_state.db_helper.clone();
 
-    let result = db.get_all_list().await;
-    if let Err(e) = &result {
-        internal_error!("Error: {:?}", e);
-    }
+    let result = db.get_all_list().await?;
 
-    Ok(Json(result.unwrap()))
+    Ok(Json(result))
 }
 
 async fn post_insert_item(
@@ -73,21 +73,7 @@ async fn post_insert_item(
     let db = app_state.db_helper.clone();
     event!(tracing::Level::INFO, "Inserting anime item: {:?}", req);
 
-    let result = db.insert_anime_item(req).await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(anime_id) => {
-                return Err(status!(NOT_FOUND, "AnimeNotFound:{}", anime_id))
-            }
-            DbError::EpisodeNotFound(_) => return Err(status!(INTERNAL_SERVER_ERROR)),
-            DbError::WatchListNotFound(_) => {
-                internal_error!();
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    db.insert_anime_item(req).await?;
 
     Ok(StatusCode::CREATED)
 }
@@ -97,25 +83,14 @@ async fn post_add_item_to_watch_list(
     Json(req): Json<AnimeWatchListRequest>,
 ) -> Result<StatusCode> {
     let db = app_state.db_helper.clone();
-    event!(tracing::Level::INFO, "Adding anime item to watch list: {:?}", req);
+    event!(
+        tracing::Level::INFO,
+        "Adding anime item to watch list: {:?}",
+        req
+    );
 
-    let result = db
-        .add_item_to_watch_list(req.anime_id, &req.watch_list_name)
-        .await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(anime_id) => {
-                return Err(status!(BAD_REQUEST, "AnimeNotFound:{}", anime_id))
-            }
-            DbError::EpisodeNotFound(_) => return Err(status!(INTERNAL_SERVER_ERROR)),
-            DbError::WatchListNotFound(_) => {
-                internal_error!();
-            },
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    db.add_item_to_watch_list(req.anime_id, &req.watch_list_name)
+        .await?;
 
     Ok(StatusCode::CREATED)
 }
@@ -126,10 +101,7 @@ async fn post_add_new_watch_list(
 ) -> Result<StatusCode> {
     let db = app_state.db_helper.clone();
 
-    let result = db.add_new_watch_list(&req.watch_list_name).await;
-    if let Err(e) = &result {
-        internal_error!("Error: {:?}", e);
-    }
+    db.add_new_watch_list(&req.watch_list_name).await?;
 
     Ok(StatusCode::CREATED)
 }
@@ -140,26 +112,8 @@ async fn post_update_episode_watched_state(
 ) -> Result<StatusCode> {
     let db = app_state.db_helper.clone();
 
-    let result = db
-        .update_episode_watched_state(req.anime_id,req.ep, req.watched)
-        .await;
-    if let Err(e) = &result {
-        error!("Error: {:?}", e);
-        match e {
-            DbError::AnimeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::EpisodeNotFound(episode_id) => {
-                return Err(status!(BAD_REQUEST, "EpisodeNotFound:{}", episode_id))
-            }
-            DbError::WatchListNotFound(_) => {
-                internal_error!();
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    db.update_episode_watched_state(req.anime_id, req.ep, req.watched)
+        .await?;
 
     Ok(StatusCode::OK)
 }
@@ -170,25 +124,8 @@ async fn post_update_watch_list_archived(
 ) -> Result<StatusCode> {
     let db = app_state.db_helper.clone();
 
-    let result = db
-        .update_watch_list_archive_state(&req.watch_list_name, req.archived)
-        .await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::EpisodeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::WatchListNotFound(watch_list_name) => {
-                return Err(status!(BAD_REQUEST, "WatchListNotFound:{}", watch_list_name))
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    db.update_watch_list_archive_state(&req.watch_list_name, req.archived)
+        .await?;
 
     Ok(StatusCode::OK)
 }
@@ -199,23 +136,8 @@ async fn post_update_anime_visibility(
 ) -> Result<StatusCode> {
     let db = app_state.db_helper.clone();
 
-    let result = db.update_anime_visibility(req.anime_id, req.visible).await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::EpisodeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::WatchListNotFound(_) => {
-                internal_error!();
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    db.update_anime_visibility(req.anime_id, req.visible)
+        .await?;
 
     Ok(StatusCode::OK)
 }
@@ -226,23 +148,9 @@ async fn get_query_anime_by_id(
 ) -> Result<Json<AnimeState>> {
     let db = app_state.db_helper.clone();
 
-    let result = db.query_anime_by_id(anime_id).await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(anime_id) => {
-                return Err(status!(NOT_FOUND, "AnimeNotFound:{}", anime_id))
-            }
-            DbError::EpisodeNotFound(_) => return Err(status!(INTERNAL_SERVER_ERROR)),
-            DbError::WatchListNotFound(_) => {
-                internal_error!();
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    let result = db.query_anime_by_id(anime_id).await?;
 
-    Ok(Json(result.unwrap()))
+    Ok(Json(result))
 }
 
 async fn post_delete_watch_list(
@@ -251,10 +159,7 @@ async fn post_delete_watch_list(
 ) -> Result<StatusCode> {
     let db = app_state.db_helper.clone();
 
-    let result = db.delete_watch_list(&req.watch_list_name).await;
-    if let Err(e) = &result {
-        internal_error!("Error: {:?}", e);
-    }
+    db.delete_watch_list(&req.watch_list_name).await?;
 
     Ok(StatusCode::OK)
 }
@@ -265,25 +170,9 @@ async fn post_query_anime_states(
 ) -> Result<Json<Vec<AnimeState>>> {
     let db = app_state.db_helper.clone();
 
-    let result = db.query_anime_states_by_ids(&req.anime_ids).await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::EpisodeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::WatchListNotFound(_) => {
-                internal_error!();
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    let result = db.query_anime_states_by_ids(&req.anime_ids).await?;
 
-    Ok(Json(result.unwrap()))
+    Ok(Json(result))
 }
 
 async fn post_delete_anime_state_from_watch_list(
@@ -292,53 +181,20 @@ async fn post_delete_anime_state_from_watch_list(
 ) -> Result<StatusCode> {
     let db = app_state.db_helper.clone();
 
-    let result = db
-        .delete_anime_state_from_watch_list(req.anime_id, &req.watch_list_name)
-        .await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::EpisodeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::WatchListNotFound(_) => {
-                internal_error!();
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    db.delete_anime_state_from_watch_list(req.anime_id, &req.watch_list_name)
+        .await?;
 
     Ok(StatusCode::OK)
 }
 
 async fn get_query_all_anime_states(
-    State(app_state): State<AppState>
-) -> Result<Json<Vec<AnimeState>>>{
+    State(app_state): State<AppState>,
+) -> Result<Json<Vec<AnimeState>>> {
     let db = app_state.db_helper.clone();
 
-    let result = db.query_all_animes().await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::EpisodeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::WatchListNotFound(_) => {
-                internal_error!();
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    let result = db.query_all_animes().await?;
 
-    Ok(Json(result.unwrap()))
+    Ok(Json(result))
 }
 
 async fn get_query_watch_list_by_name(
@@ -347,23 +203,16 @@ async fn get_query_watch_list_by_name(
 ) -> Result<Json<WatchList>> {
     let db = app_state.db_helper.clone();
 
-    let result = db.get_watch_list(&watch_list_name).await;
-    if let Err(e) = &result {
-        match e {
-            DbError::AnimeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::EpisodeNotFound(_) => {
-                internal_error!();
-            }
-            DbError::WatchListNotFound(watch_list_name) => {
-                return Err(status!(NOT_FOUND, "WatchListNotFound:{}", watch_list_name))
-            }
-            DbError::PostgresError(e) => {
-                internal_error!("Error: {:?}", e);
-            }
-        }
-    }
+    let result = db.get_watch_list(&watch_list_name).await?;
 
-    Ok(Json(result.unwrap()))
+    Ok(Json(result))
+}
+
+async fn post_update_anime_rating(
+    State(app_state): State<AppState>,
+    Json(PostUpdateAnimeRatingRequest { anime_id, rating }): Json<PostUpdateAnimeRatingRequest>,
+) -> Result<StatusCode> {
+    let db = app_state.db_helper.clone();
+    db.update_anime_rating(anime_id, rating).await?;
+    Ok(StatusCode::OK)
 }

@@ -129,6 +129,7 @@ pub struct AnimeState {
     pub favorite: bool,
     pub watched_episodes: HashSet<Float>,
     pub visibility: bool,
+    pub rating: Option<i32>,
 }
 
 impl WatchList {
@@ -153,7 +154,6 @@ impl From<&Row> for WatchList {
 
 impl From<&Row> for AnimeState {
     fn from(value: &Row) -> Self {
-
         let watched_episodes: Value = value.get(3);
         let watched_episodes: HashSet<Float> = serde_json::from_value(watched_episodes).unwrap();
 
@@ -161,8 +161,9 @@ impl From<&Row> for AnimeState {
             anime_id: value.get(0),
             anime_item: serde_json::from_value(value.get(1)).unwrap(),
             favorite: value.get(2),
-            watched_episodes: watched_episodes,
+            watched_episodes,
             visibility: value.get(4),
+            rating: value.get(5),
         }
     }
 }
