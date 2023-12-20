@@ -53,7 +53,7 @@ pub fn create_router(state: &AppState) -> Router<AppState> {
         .route("/get_anime_states", post(post_query_anime_states))
         .route("/all", get(get_query_all_anime_states))
         .route(
-            "/get_watch_list/",
+            "/get_watch_list",
             get(get_query_watch_list_by_name),
         )
 }
