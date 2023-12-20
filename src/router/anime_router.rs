@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{State, Query},
     http::StatusCode,
     middleware::from_fn_with_state,
     routing::{get, post},
@@ -13,7 +13,7 @@ use crate::{
         request::{
             AnimeWatchListRequest, GetAnimeStatesRequest, PostUpdateAnimeRatingRequest,
             UpdateAnimeVisibilityRequest, UpdateEpisodeWatchedStateRequest,
-            UpdateWatchListArchivedRequest, WatchListRequest,
+            UpdateWatchListArchivedRequest, WatchListRequest, AnimeIdRequest,
         },
         AnimeItem, AnimeState, WatchList,
     },
@@ -49,11 +49,11 @@ pub fn create_router(state: &AppState) -> Router<AppState> {
         .route("/update_anime_rating", post(post_update_anime_rating))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
         .route("/list", get(get_all_list))
-        .route("/get/:anime_id", get(get_query_anime_by_id))
+        .route("/get", get(get_query_anime_by_id))
         .route("/get_anime_states", post(post_query_anime_states))
         .route("/all", get(get_query_all_anime_states))
         .route(
-            "/get_watch_list/:watch_list_name",
+            "/get_watch_list/",
             get(get_query_watch_list_by_name),
         )
 }
@@ -144,7 +144,7 @@ async fn post_update_anime_visibility(
 
 async fn get_query_anime_by_id(
     State(app_state): State<AppState>,
-    Path(anime_id): Path<i32>,
+    Query(AnimeIdRequest{anime_id}): Query<AnimeIdRequest>,
 ) -> Result<Json<AnimeState>> {
     let db = app_state.db_helper.clone();
 
@@ -199,7 +199,7 @@ async fn get_query_all_anime_states(
 
 async fn get_query_watch_list_by_name(
     State(app_state): State<AppState>,
-    Path(watch_list_name): Path<String>,
+    Query(WatchListRequest{watch_list_name}): Query<WatchListRequest>,
 ) -> Result<Json<WatchList>> {
     let db = app_state.db_helper.clone();
 
