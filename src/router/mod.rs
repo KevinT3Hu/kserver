@@ -3,7 +3,7 @@ use tracing::event;
 
 use crate::{
     model::request::{LogInRequest, LogOutRequest},
-    AppState,
+    AppState, AuthStatus,
 };
 
 pub mod anime_router;
@@ -30,6 +30,17 @@ macro_rules! internal_error {
 
     () => {
         return Err(status!(INTERNAL_SERVER_ERROR));
+    }
+}
+
+pub async fn post_validate_login(
+    State(app_state): State<AppState>,
+    Json(req): Json<LogOutRequest>,
+) -> Result<ComplexResponse> {
+    let auth_ret = app_state.auth(&req.token).await;
+    match auth_ret {
+        AuthStatus::Authenticated => Ok(status!(NO_CONTENT)),
+        _ => Ok(status!(UNAUTHORIZED)),
     }
 }
 
