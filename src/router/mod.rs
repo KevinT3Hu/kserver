@@ -1,15 +1,23 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, http::StatusCode, Json, routing::post, middleware::from_fn_with_state};
 use tracing::event;
 
 use crate::{
     model::request::{LogInRequest, LogOutRequest},
-    AppState, AuthStatus,
+    AppState, auth_middleware
 };
 
 pub mod anime_router;
 
 pub type ComplexResponse = (StatusCode, String);
 pub type Result<T> = std::result::Result<T, ComplexResponse>;
+
+pub fn create_router(state: &AppState) -> axum::Router<AppState> {
+    axum::Router::new()
+        .route("/validate", post(post_validate_login))
+        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .route("/login", post(post_log_in))
+        .route("/logout", post(post_log_out))
+}
 
 #[macro_export]
 macro_rules! status {
@@ -33,18 +41,11 @@ macro_rules! internal_error {
     }
 }
 
-pub async fn post_validate_login(
-    State(app_state): State<AppState>,
-    Json(req): Json<LogOutRequest>,
-) -> Result<ComplexResponse> {
-    let auth_ret = app_state.auth(&req.token).await;
-    match auth_ret {
-        AuthStatus::Authenticated => Ok(status!(NO_CONTENT)),
-        _ => Ok(status!(UNAUTHORIZED)),
-    }
+async fn post_validate_login() -> Result<ComplexResponse> {
+    Ok(status!(NO_CONTENT))
 }
 
-pub async fn post_log_in(
+async fn post_log_in(
     State(app_state): State<AppState>,
     Json(req): Json<LogInRequest>,
 ) -> Result<String> {
@@ -64,7 +65,7 @@ pub async fn post_log_in(
     Err(status!(UNAUTHORIZED, "OtpNotValid"))
 }
 
-pub async fn post_log_out(
+async fn post_log_out(
     State(app_state): State<AppState>,
     Json(req): Json<LogOutRequest>,
 ) -> Result<String> {

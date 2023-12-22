@@ -7,12 +7,10 @@ use axum::{
     http::{Method, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    routing::post,
     Router,
 };
 use helper::db_helper::DbHelper;
 use rand::Rng;
-use router::{post_log_in, post_log_out, post_validate_login};
 use tokio::sync::Mutex;
 use totp_rs::{Algorithm, TOTP};
 use tower_http::cors::{Any, CorsLayer};
@@ -223,12 +221,13 @@ async fn create_app() -> Router {
 
     Router::new()
         .nest(
+            "/",
+            router::create_router(&state)
+        )
+        .nest(
             router::anime_router::PATH,
             router::anime_router::create_router(&state),
         )
-        .route("/validate", post(post_validate_login))
-        .route("/auth", post(post_log_in))
-        .route("/logout", post(post_log_out))
         .with_state(state)
         .layer(cors)
 }
