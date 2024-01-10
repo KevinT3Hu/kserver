@@ -137,7 +137,7 @@ impl DbHelper {
     pub async fn update_anime_visibility(&self, anime_id: i32, visibility: bool) -> Result<()> {
         let client = self.anime_db.clone();
         let stmt = client
-            .prepare("UPDATE anime_state SET visibility = $1 WHERE anime_id = $2")
+            .prepare("UPDATE anime_state SET visible = $1 WHERE anime_id = $2")
             .await?;
         client.execute(&stmt, &[&visibility, &anime_id]).await?;
         Ok(())
