@@ -24,7 +24,7 @@ use super::Result;
 
 pub const PATH: &str = "/anime";
 
-pub fn create_router(state: &AppState) -> Router<AppState> {
+pub fn create(state: &AppState) -> Router<AppState> {
     Router::new()
         .route("/insert_anime_item", post(post_insert_item))
         .route("/add_item_to_watch_list", post(post_add_item_to_watch_list))

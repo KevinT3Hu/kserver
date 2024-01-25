@@ -6,12 +6,12 @@ use crate::{
     AppState, auth_middleware
 };
 
-pub mod anime_router;
+pub mod anime;
 
 pub type ComplexResponse = (StatusCode, String);
 pub type Result<T> = std::result::Result<T, ComplexResponse>;
 
-pub fn create_router(state: &AppState) -> axum::Router<AppState> {
+pub fn create(state: &AppState) -> axum::Router<AppState> {
     axum::Router::new()
         .route("/validate", post(post_validate_login))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
@@ -47,15 +47,15 @@ async fn post_validate_login() -> Result<ComplexResponse> {
 
 async fn post_log_in(
     State(app_state): State<AppState>,
-    Json(req): Json<LogInRequest>,
+    Json(request): Json<LogInRequest>,
 ) -> Result<String> {
     event!(
         tracing::Level::INFO,
         "Received request to log in, OTP: {}",
-        req.otp
+        request.otp
     );
-    let ret = app_state.verify(&req.otp);
-    if let Err(()) = &ret {
+    let ret = app_state.verify(&request.otp);
+    if ret.is_err() {
         internal_error!("Error Verifying OTP");
     }
     let ret = ret.unwrap();
@@ -67,9 +67,9 @@ async fn post_log_in(
 
 async fn post_log_out(
     State(app_state): State<AppState>,
-    Json(req): Json<LogOutRequest>,
+    Json(request): Json<LogOutRequest>,
 ) -> Result<String> {
     event!(tracing::Level::INFO, "Received request to log out");
-    app_state.clear_token(&req.token).await;
+    app_state.clear_token(&request.token).await;
     Ok(String::new())
 }

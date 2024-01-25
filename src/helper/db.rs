@@ -7,6 +7,7 @@ use crate::model::{AnimeItem, AnimeState, WatchList};
 
 use super::db_error::DbError;
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Clone)]
 pub struct DbHelper {
     anime_db: Arc<tokio_postgres::Client>,
@@ -23,7 +24,7 @@ impl DbHelper {
                 .unwrap();
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                panic!("connection error: {}", e);
+                panic!("connection error: {e}");
             }
         });
         info!("Database helper created");
@@ -35,7 +36,7 @@ impl DbHelper {
     pub async fn get_all_list(&self) -> Result<Vec<WatchList>> {
         let client = self.anime_db.clone();
         let rows = client.query("SELECT * FROM anime_list", &[]).await?;
-        let rows = rows.iter().map(|row| row.into()).collect();
+        let rows = rows.iter().map(std::convert::Into::into).collect();
 
         Ok(rows)
     }
@@ -160,7 +161,7 @@ impl DbHelper {
             .prepare("SELECT * FROM anime_state WHERE anime_id = ANY($1)")
             .await?;
         let rows = client.query(&stmt, &[&anime_ids]).await?;
-        let ret = rows.iter().map(|row| row.into()).collect();
+        let ret = rows.iter().map(std::convert::Into::into).collect();
         Ok(ret)
     }
 
@@ -182,7 +183,7 @@ impl DbHelper {
             .prepare("SELECT * FROM anime_list WHERE animes @> ARRAY[$1]")
             .await?;
         let rows = client.query(&stmt, &[&anime_id]).await?;
-        if rows.len() == 0 {
+        if rows.is_empty() {
             client
                 .execute("DELETE FROM anime_state WHERE anime_id = $1", &[&anime_id])
                 .await?;
@@ -194,7 +195,7 @@ impl DbHelper {
     pub async fn query_all_animes(&self) -> Result<Vec<AnimeState>> {
         let client = self.anime_db.clone();
         let rows = client.query("SELECT * FROM anime_state", &[]).await?;
-        let ret = rows.iter().map(|row| row.into()).collect();
+        let ret = rows.iter().map(std::convert::Into::into).collect();
 
         Ok(ret)
     }

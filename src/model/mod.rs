@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_precision_loss)]
 use std::{
     collections::HashSet,
     fmt::{Display, Formatter},
@@ -62,8 +64,8 @@ pub enum Float {
 impl PartialEq for Float {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
-            (Self::Half(l0), Self::Half(r0)) => l0 == r0,
+            (Self::Int(l0), Self::Int(r0))
+            | (Self::Half(l0), Self::Half(r0)) => l0 == r0,
             _ => false,
         }
     }
@@ -84,10 +86,10 @@ impl Display for Float {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int(i) => {
-                write!(f, "{}", i)
+                write!(f, "{i}")
             }
             Self::Half(i) => {
-                write!(f, "{}.5", i)
+                write!(f, "{i}.5")
             }
         }
     }
@@ -110,7 +112,7 @@ impl Serialize for Float {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             Self::Int(i) => serializer.serialize_i32(*i),
-            Self::Half(i) => serializer.serialize_f32((*i as f32 + 0.5) as f32),
+            Self::Half(i) => serializer.serialize_f32(*i as f32 + 0.5),
         }
     }
 }
@@ -130,16 +132,6 @@ pub struct AnimeState {
     pub watched_episodes: HashSet<Float>,
     pub visibility: bool,
     pub rating: Option<i32>,
-}
-
-impl WatchList {
-    pub fn new(title: &str) -> Self {
-        Self {
-            title: title.to_string(),
-            archived: false,
-            animes: Vec::new(),
-        }
-    }
 }
 
 impl From<&Row> for WatchList {

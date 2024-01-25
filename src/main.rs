@@ -1,5 +1,5 @@
 use core::panic;
-use std::{io::Write, sync::Arc};
+use std::{io::Write, sync::Arc, time::SystemTimeError};
 
 use axum::{
     body::BoxBody,
@@ -9,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
     Router,
 };
-use helper::db_helper::DbHelper;
+use helper::db::DbHelper;
 use rand::Rng;
 use tokio::sync::Mutex;
 use totp_rs::{Algorithm, TOTP};
@@ -32,7 +32,7 @@ fn gen_token() -> AuthToken {
 }
 
 #[derive(Clone)]
-pub struct AppState {
+struct AppState {
     pub db_helper: DbHelper,
     totp: TOTP,
     token: Arc<Mutex<Vec<AuthToken>>>,
@@ -65,12 +65,12 @@ impl AppState {
         }
     }
 
-    pub fn verify(&self, code: &str) -> Result<bool, ()> {
+    pub fn verify(&self, code: &str) -> Result<bool, SystemTimeError> {
         // if MOCK_TOTP is set, return true
-        if let Ok(_) = std::env::var("MOCK_TOTP") {
+        if std::env::var("MOCK_TOTP").is_ok() {
             return Ok(true);
         }
-        self.totp.check_current(code).map_err(|_| ())
+        self.totp.check_current(code)
     }
 
     pub async fn auth(&self, in_token: &str) -> AuthStatus {
@@ -114,7 +114,7 @@ impl AppState {
         if !found {
             return;
         }
-        token.swap_remove(found as usize);
+        token.swap_remove(usize::from(found));
     }
 }
 
@@ -136,17 +136,17 @@ fn init_totp() -> TOTP {
     event!(
         Level::INFO,
         "totp secret: {}",
-        String::from_utf8(totp.secret.to_vec()).unwrap()
+        String::from_utf8(totp.secret.clone()).unwrap()
     );
     totp
 }
 
 async fn auth_middleware<B>(
     State(app_state): State<AppState>,
-    req: Request<B>,
+    request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    let token = req.headers().get("Authorization");
+    let token = request.headers().get("Authorization");
     if token.is_none() {
         return Response::builder()
             .status(401)
@@ -154,7 +154,7 @@ async fn auth_middleware<B>(
             .unwrap();
     }
     let token = token.unwrap().to_str().unwrap();
-    let token = token.split(" ").collect::<Vec<&str>>();
+    let token = token.split(' ').collect::<Vec<&str>>();
     if token.len() != 2 {
         return Response::builder()
             .status(401)
@@ -167,19 +167,19 @@ async fn auth_middleware<B>(
     match ret {
         AuthStatus::Authenticated => {
             event!(Level::INFO, "Authenticated");
-            return next.run(req).await;
+            next.run(request).await
         }
         AuthStatus::AuthNotValid => {
             event!(Level::INFO, "Auth not valid");
-            return status!(UNAUTHORIZED, "AuthNotValid").into_response();
+            status!(UNAUTHORIZED, "AuthNotValid").into_response()
         }
         AuthStatus::AuthExpired => {
             event!(Level::INFO, "Auth expired");
-            return status!(UNAUTHORIZED, "AuthExpired").into_response();
+            status!(UNAUTHORIZED, "AuthExpired").into_response()
         }
         AuthStatus::NotLoggedIn => {
             event!(Level::INFO, "Not logged in");
-            return status!(UNAUTHORIZED, "NotLoggedIn").into_response();
+            status!(UNAUTHORIZED, "NotLoggedIn").into_response()
         }
     }
 }
@@ -187,7 +187,7 @@ async fn auth_middleware<B>(
 #[tokio::main]
 async fn main() {
 
-    if let Ok(_) = std::env::var("GENERATE_TOTP_QR") {
+    if std::env::var("GENERATE_TOTP_QR").is_ok() {
         let totp = init_totp();
         std::fs::remove_file("./qr.png").unwrap_or_default();
             let qr = totp.get_qr_png().unwrap();
@@ -222,11 +222,11 @@ async fn create_app() -> Router {
     Router::new()
         .nest(
             "/",
-            router::create_router(&state)
+            router::create(&state)
         )
         .nest(
-            router::anime_router::PATH,
-            router::anime_router::create_router(&state),
+            router::anime::PATH,
+            router::anime::create(&state),
         )
         .with_state(state)
         .layer(cors)
