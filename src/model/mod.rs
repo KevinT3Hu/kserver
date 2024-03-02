@@ -45,7 +45,7 @@ pub struct AnimeItem {
     pub name: String,
     pub name_cn: String,
     pub summary: String,
-    pub date: String,
+    pub date: Option<String>,
     pub eps: i32,
     pub total_episodes: i32,
     pub images: ImageSet,
